@@ -49,7 +49,7 @@ def find_path_bfs(
                     node = normalize_title(link)
                     if node not in fwd_parents:
                         fwd_parents[node] = (curr, d1 + 1)
-                        # Проверяем встречу и общую глубину
+                        
                         if node in bwd_parents:
                             d2 = bwd_parents[node][1]
                             if d1 + 1 + d2 <= max_depth:
