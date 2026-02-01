@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import collections
 from dataclasses import dataclass
 from typing import Optional
@@ -26,67 +25,74 @@ def find_path_bfs(
     if start == goal:
         return SearchResult(path=[start], visited_pages=0)
 
-    q1 = collections.deque([start])
-    q2 = collections.deque([goal])
+    fwd_q = collections.deque([(start, 0)])
+    bwd_q = collections.deque([(goal, 0)])
     
-    parents1 = {start: None}
-    parents2 = {goal: None}
+    fwd_parents = {start: (None, 0)} 
+    bwd_parents = {goal: (None, 0)}
     
-    pages = 0
+    pages_count = 0
 
-    while q1 and q2:
-        if pages >= max_pages:
+    while fwd_q or bwd_q:
+        if pages_count >= max_pages:
             break
 
-        # Вперед от старта
-        curr1 = q1.popleft()
-        pages += 1
-        try:
-            links1 = provider.get_links(curr1)
-            if links1:
-                for link in links1:
-                    link = normalize_title(link)
-                    if link not in parents1:
-                        parents1[link] = curr1
-                        if link in parents2:
-                            return _make_res(parents1, parents2, link, pages)
-                        q1.append(link)
-        except:
-            pass
 
-        if pages >= max_pages:
+        if fwd_q and (not bwd_q or len(fwd_q) <= len(bwd_q)):
+            curr, d1 = fwd_q.popleft()
+            if d1 >= max_depth: continue
+            
+            pages_count += 1
+            try:
+                links = provider.get_links(curr)
+                for link in (links or []):
+                    node = normalize_title(link)
+                    if node not in fwd_parents:
+                        fwd_parents[node] = (curr, d1 + 1)
+                        # Проверяем встречу и общую глубину
+                        if node in bwd_parents:
+                            d2 = bwd_parents[node][1]
+                            if d1 + 1 + d2 <= max_depth:
+                                return _build_total_path(fwd_parents, bwd_parents, node, pages_count)
+                        fwd_q.append((node, d1 + 1))
+            except:
+                continue
+        
+        elif bwd_q:
+            curr, d2 = bwd_q.popleft()
+            if d2 >= max_depth: continue
+            
+            pages_count += 1
+            try:
+                links = provider.get_links(curr)
+                for link in (links or []):
+                    node = normalize_title(link)
+                    if node not in bwd_parents:
+                        bwd_parents[node] = (curr, d2 + 1)
+                        if node in fwd_parents:
+                            d1 = fwd_parents[node][1]
+                            if d1 + d2 + 1 <= max_depth:
+                                return _build_total_path(fwd_parents, bwd_parents, node, pages_count)
+                        bwd_q.append((node, d2 + 1))
+            except:
+                continue
+        else:
             break
-
-        # Навстречу от цели
-        curr2 = q2.popleft()
-        pages += 1
-        try:
-            links2 = provider.get_links(curr2)
-            if links2:
-                for link in links2:
-                    link = normalize_title(link)
-                    if link not in parents2:
-                        parents2[link] = curr2
-                        if link in parents1:
-                            return _make_res(parents1, parents2, link, pages)
-                        q2.append(link)
-        except:
-            pass
 
     return None
 
-def _make_res(p1, p2, bridge, count):
-    res = []
+def _build_total_path(fwd_p, bwd_p, bridge, count):
+    path = []
+
+    curr = bridge
+    while curr is not None:
+        path.append(curr)
+        curr = fwd_p[curr][0]
+    path = path[::-1]
     
-    t1 = bridge
-    while t1 is not None:
-        res.append(t1)
-        t1 = p1[t1]
-    res = res[::-1]
-    
-    t2 = p2[bridge]
-    while t2 is not None:
-        res.append(t2)
-        t2 = p2[t2]
+    curr = bwd_p[bridge][0]
+    while curr is not None:
+        path.append(curr)
+        curr = bwd_p[curr][0]
         
-    return SearchResult(path=res, visited_pages=count)
+    return SearchResult(path=path, visited_pages=count)
